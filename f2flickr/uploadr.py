@@ -133,8 +133,8 @@ def movdate(inmov):
 #	    print "modification date:",
 	    mod_date = datetime.datetime.utcfromtimestamp(modification_date - EPOCH_ADJUSTER)
 #	    print mod_date
-	    dict['EXIF DateTimeDigitized'] = str(create_date)
-	    dict['EXIF DatePost'] = str(mod_date)
+	    dict['EXIF DateTimeDigitized'] = create_date
+	    dict['EXIF DatePost'] = mod_date
 #	    print "cd", dict
 	    return dict
 
@@ -419,8 +419,9 @@ class Uploadr:
         return the uploaded files one-by-one.
         """
         self.uploaded = shelve.open( HISTORY_FILE )
+        picTags = str(datetime.now().strftime('%Y%m%d'))
         for image in newImages:
-            up = self.uploadImage( image )
+            up = self.uploadImage( image, picTags )
             if up:
                 yield up
             if self.abandonUploads:
@@ -428,7 +429,7 @@ class Uploadr:
                 break
         self.uploaded.close()
 
-    def uploadImage( self, image ):
+    def uploadImage( self, image, picTags ):
         """
         Upload a single image. Returns the photoid, or None on failure.
         """
@@ -489,8 +490,6 @@ class Uploadr:
                 realTags = (' '.join('"' + item + '"' for item in  realTags))
 
 #            picTags = '"#' + folderTag + '" ' + realTags
-            picTags = str(datetime.now().strftime('%Y-%m-%d_%H:%M:%S'))
-
             #check if we need to override photo dates
             if configdict.get('override_dates', '0') == '1':
                 dateTaken = datePosted = ''
@@ -555,7 +554,7 @@ class Uploadr:
                             logging.exception("Skipping unexpected EXIF data in %s", image)
 
             picTags = picTags.strip()
-            print "picTags", picTags
+#            print "picTags", picTags
 #            print "dateTaken", exiftags
             logging.info("Uploading image %s with tags %s", image, picTags)
             photo = ('photo', image, open(image,'rb').read())
@@ -575,26 +574,21 @@ class Uploadr:
             d[ api.key ] = FLICKR[ api.key ]
             url = buildRequest(api.upload, d, (photo,))
             res = getResponse(url)
-#            print "res", res
-#            print "dateTaken", dateTaken
-#            print "photoid", photoid
             if isGood(res):
                 logging.debug( "successful.")
                 photoid = str(res.photoid.text)
                 self.logUpload(photoid, folderTag, image)
-                if configdict.get('override_dates', '0') == '99':
-                    print "New Dates", exiftags
+                Ext = os.path.splitext(image)[1].lower()
+                if configdict.get('override_dates', '0') == '99' and Ext == '.mov':
                     datePosted = ''
-#                    datePosted = str(exiftags['EXIF DatePost'])
                     dateTaken = str(exiftags['EXIF DateTimeDigitized'])
-#                    dateTakenGranularity = '0'
-#                    print "dateTakenGranularity", dateTakenGranularity
                     dateTakenGranularity = configdict.get('date_taken_granularity', '0')
+                    logging.info('Fix date on fileextension .mov')
+                    logging.info('Add to image' + image + ' flickrid('+ photoid +') dateTaken=' + dateTaken + ', dateTekenGranularity=' + dateTakenGranularity)
                     self.overrideDates(image, photoid, datePosted, dateTaken, dateTakenGranularity)
-                return photoid
                 if configdict.get('override_dates', '0') == '1':
                     self.overrideDates(image, photoid, datePosted, dateTaken, dateTakenGranularity)
-                print "photoid", photoid
+#                print "photoid", photoid
                 return photoid
             else :
                 print "problem.."
