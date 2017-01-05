@@ -42,6 +42,9 @@ import f2flickr.tags2set as tags2set
 from f2flickr.configuration import configdict
 from flickr2history import convert_format
 from xml.dom import minidom
+#B-Berski
+import struct
+#
 
 #
 # Location to scan for new images
@@ -88,6 +91,53 @@ flickr.API_KEY = FLICKR["api_key" ]
 flickr.API_SECRET = FLICKR["secret" ]
 flickr.tokenFile = ".flickrToken"
 flickr.AUTH = True
+
+def movdate(inmov):
+	dict = {}
+	import datetime
+#	print "INMOV", inmov
+	ATOM_HEADER_SIZE = 8
+	# difference between Unix epoch and QuickTime epoch, in seconds
+	EPOCH_ADJUSTER = 2082844800
+	
+	#if len(sys.argv) < 2:
+	#    print "USAGE: mov-length.py <file.mov>"
+	#    sys.exit(1)
+	
+	# open file and search for moov item
+	#f = open(sys.argv[1], "rb")
+	f = open(inmov, "rb")
+	
+	#f = inmov
+	while 1:
+	    atom_header = f.read(ATOM_HEADER_SIZE)
+	    if atom_header[4:8] == 'moov':
+	        break
+	    else:
+	        atom_size = struct.unpack(">I", atom_header[0:4])[0]
+	        f.seek(atom_size - 8, 1)
+	
+	# found 'moov', look for 'mvhd' and timestamps
+	atom_header = f.read(ATOM_HEADER_SIZE)
+	if atom_header[4:8] == 'cmov':
+	    print "moov atom is compressed"
+	elif atom_header[4:8] != 'mvhd':
+	    print "expected to find 'mvhd' header"
+	else:
+	    f.seek(4, 1)
+	    creation_date = struct.unpack(">I", f.read(4))[0]
+	    modification_date = struct.unpack(">I", f.read(4))[0]
+#	    print "creation date:",
+	    create_date = datetime.datetime.utcfromtimestamp(creation_date - EPOCH_ADJUSTER)
+#	    print create_date
+#	    print "modification date:",
+	    mod_date = datetime.datetime.utcfromtimestamp(modification_date - EPOCH_ADJUSTER)
+#	    print mod_date
+	    dict['EXIF DateTimeDigitized'] = str(create_date)
+	    dict['EXIF DatePost'] = str(mod_date)
+#	    print "cd", dict
+	    return dict
+
 
 def isGood(res):
     """
@@ -418,8 +468,13 @@ class Uploadr:
             except MemoryError:
                 exiftags = {}
             f.close()
-            #print exiftags[XPKEYWORDS]
-            #print folderTag
+#            print "XX", exiftags
+#            print "DateTaken", str(exiftags['EXIF DateTimeDigitized'])
+            if not exiftags:
+                exiftags = movdate(image)
+ #               print "ExifTags", exiftags
+#            sys.exit()
+#            print folderTag
             # make one tag equal to original file path with spaces replaced by
             # # and start it with # (for easier recognition) since space is
             # used as TAG separator by flickr
@@ -433,7 +488,8 @@ class Uploadr:
                 realTags = os.path.dirname(folderTag).split(os.sep)
                 realTags = (' '.join('"' + item + '"' for item in  realTags))
 
-            picTags = '"#' + folderTag + '" ' + realTags
+#            picTags = '"#' + folderTag + '" ' + realTags
+            picTags = str(datetime.now().strftime('%Y-%m-%d_%H:%M:%S'))
 
             #check if we need to override photo dates
             if configdict.get('override_dates', '0') == '1':
@@ -470,6 +526,7 @@ class Uploadr:
                         dateUnix = int((datetime(int(dateExif[0:4]), int(dateExif[5:7]), int(dateExif[8:10]), int(dateExif[11:13]), int(dateExif[14:16]), int(dateExif[17:19])) - datetime(1970, 1, 1)).total_seconds())
                         if configdict.get('date_taken_type', '0') == '1':
                             dateTaken = dateExif
+                            print "dateTaken", dateTaken
                         if configdict.get('date_posted_type', '0') == '1':
                             datePosted = dateUnix
                             #Use year and month from dateExif, then calculate end of month (note: Flickr does not accept future dates. You'll get current date maximum)
@@ -498,6 +555,8 @@ class Uploadr:
                             logging.exception("Skipping unexpected EXIF data in %s", image)
 
             picTags = picTags.strip()
+            print "picTags", picTags
+#            print "dateTaken", exiftags
             logging.info("Uploading image %s with tags %s", image, picTags)
             photo = ('photo', image, open(image,'rb').read())
 
@@ -516,12 +575,26 @@ class Uploadr:
             d[ api.key ] = FLICKR[ api.key ]
             url = buildRequest(api.upload, d, (photo,))
             res = getResponse(url)
+#            print "res", res
+#            print "dateTaken", dateTaken
+#            print "photoid", photoid
             if isGood(res):
                 logging.debug( "successful.")
                 photoid = str(res.photoid.text)
                 self.logUpload(photoid, folderTag, image)
+                if configdict.get('override_dates', '0') == '99':
+                    print "New Dates", exiftags
+                    datePosted = ''
+#                    datePosted = str(exiftags['EXIF DatePost'])
+                    dateTaken = str(exiftags['EXIF DateTimeDigitized'])
+#                    dateTakenGranularity = '0'
+#                    print "dateTakenGranularity", dateTakenGranularity
+                    dateTakenGranularity = configdict.get('date_taken_granularity', '0')
+                    self.overrideDates(image, photoid, datePosted, dateTaken, dateTakenGranularity)
+                return photoid
                 if configdict.get('override_dates', '0') == '1':
                     self.overrideDates(image, photoid, datePosted, dateTaken, dateTakenGranularity)
+                print "photoid", photoid
                 return photoid
             else :
                 print "problem.."
