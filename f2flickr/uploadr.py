@@ -99,13 +99,6 @@ def movdate(inmov):
 	ATOM_HEADER_SIZE = 8
 	# difference between Unix epoch and QuickTime epoch, in seconds
 	EPOCH_ADJUSTER = 2082844800
-	
-	#if len(sys.argv) < 2:
-	#    print "USAGE: mov-length.py <file.mov>"
-	#    sys.exit(1)
-	
-	# open file and search for moov item
-	#f = open(sys.argv[1], "rb")
 	f = open(inmov, "rb")
 	
 	#f = inmov
@@ -127,15 +120,10 @@ def movdate(inmov):
 	    f.seek(4, 1)
 	    creation_date = struct.unpack(">I", f.read(4))[0]
 	    modification_date = struct.unpack(">I", f.read(4))[0]
-#	    print "creation date:",
 	    create_date = datetime.datetime.utcfromtimestamp(creation_date - EPOCH_ADJUSTER)
-#	    print create_date
-#	    print "modification date:",
 	    mod_date = datetime.datetime.utcfromtimestamp(modification_date - EPOCH_ADJUSTER)
-#	    print mod_date
 	    dict['EXIF DateTimeDigitized'] = create_date
 	    dict['EXIF DatePost'] = mod_date
-#	    print "cd", dict
 	    return dict
 
 
@@ -583,7 +571,7 @@ class Uploadr:
                     datePosted = ''
                     dateTaken = str(exiftags['EXIF DateTimeDigitized'])
                     dateTakenGranularity = configdict.get('date_taken_granularity', '0')
-                    logging.info('Fix date on fileextension .mov')
+                    logging.info('Fix datetaken on file extension .mov')
                     logging.info('Add to image' + image + ' flickrid('+ photoid +') dateTaken=' + dateTaken + ', dateTekenGranularity=' + dateTakenGranularity)
                     self.overrideDates(image, photoid, datePosted, dateTaken, dateTakenGranularity)
                 if configdict.get('override_dates', '0') == '1':
@@ -729,12 +717,10 @@ def main():
     logging.info('Finding new photos from folder %s' % IMAGE_DIR)
     images = grabNewImages(IMAGE_DIR)
     logging.info('Found %d images' % len(images))
-
     # Convert history file to new format, if necessary.
     logging.info('Converting existing history file to new format, if needed')
     convert_format(images, IMAGE_DIR, HISTORY_FILE)
     logging.info('Conversion complete')
-
     #uploads all images that are in folders and not in history file
     logging.debug("Uploading %d images", len(images))
     uploadedNow = []

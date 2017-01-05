@@ -96,7 +96,7 @@ def convert_format(images, imageDir, historyFile):
         uploaded[ image] = ( photo_id, file_mtime, file_size )
         uploaded[ photo_id ] = image
         num_converted += 1
-    sys.stdout.write('\n'); sys.stdout.flush()
+    sys.stdout.write(''); sys.stdout.flush()
     logging.info('num_images=%d num_ok=%d num_not_found=%d num_converted=%d' %
                      (num_images, num_ok, num_not_found, num_converted))
     uploaded.close()
